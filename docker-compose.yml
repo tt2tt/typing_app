@@ -1,0 +1,64 @@
+# サービス定義
+services:
+# Next.jsフロントエンドサービス
+  frontend:
+    # Dockerfileの場所
+    build: ./frontend
+    # ホスト:コンテナのポートマッピング
+    ports:
+      - "3000:3000"
+    # APIのベースURL
+    environment:
+      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
+    # backendサービス起動後に起動
+    depends_on:
+      - backend
+
+  # Djangoバックエンドサービス
+  backend:
+    # Dockerfileの場所
+    build: ./backend
+    # ホスト:コンテナのポートマッピング
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=${DB_HOST} # DBホスト名
+      - DB_NAME=${DB_NAME} # DB名
+      - DB_USER=${DB_USER} # DBユーザー
+      - DB_PASS=${DB_PASS} # DBパスワード
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY} # Djangoシークレットキー
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS} # 許可ホスト
+    # dbサービス起動後に起動
+    depends_on:
+      - db
+    # DB起動待機とマイグレーション・サーバ起動
+    command: >
+      bash -c "\
+        if [ ! -f ./wait-for-it.sh ]; then \
+          wget -q https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh && chmod +x wait-for-it.sh; \
+        fi && \
+        ./wait-for-it.sh db:3306 --timeout=60 --strict -- \
+          bash -c 'python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000'"
+
+  # MySQLデータベースサービス
+  db:
+    # 使用するMySQLイメージ
+    image: mysql:8
+    environment:
+      - MYSQL_DATABASE=${DB_NAME} # DB名
+      - MYSQL_USER=${DB_USER} # DBユーザー
+      - MYSQL_PASSWORD=${DB_PASS} # DBパスワード
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD} # rootパスワード
+    # データ永続化
+    volumes:
+      - db_data:/var/lib/mysql
+    # ヘルスチェック
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+# ボリューム定義
+volumes:
+  db_data:
