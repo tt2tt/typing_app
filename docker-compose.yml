@@ -10,9 +10,15 @@ services:
     # APIのベースURL
     environment:
       - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
+      - NODE_ENV=${NODE_ENV}
     # backendサービス起動後に起動
     depends_on:
       - backend
+    # コンテナ内と連動
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/next.config.ts:/app/next.config.ts
 
   # Djangoバックエンドサービス
   backend:
