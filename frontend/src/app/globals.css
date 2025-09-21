@@ -33,3 +33,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Loading animation (global) */
+@keyframes loading-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+
+.loading-bounce {
+  animation: loading-bounce 1.2s ease-in-out infinite;
+}

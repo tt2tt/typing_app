@@ -1,16 +1,7 @@
 "use client";
 
-// 日本語とローマ字をJSON形式で管理
-const typingData = [
-  { jp: "こんにちは", roma: "konnichiwa" },
-  { jp: "おはようございます", roma: "ohayougozaimasu" },
-  { jp: "タイピング練習", roma: "taipingu renshuu" },
-  { jp: "プログラミング", roma: "puroguramingu" },
-  { jp: "人工知能", roma: "jinkou chinou" },
-  { jp: "日本語入力", roma: "nihongo nyuuryoku" },
-  { jp: "開発環境", roma: "kaihatsu kankyou" }
-];
 import React, { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Keyboard from "react-simple-keyboard";
@@ -27,6 +18,8 @@ const getEvaluation = (cps: number) => {
 };
 
 const TypingPractice: React.FC = () => {
+  const searchParams = useSearchParams();
+  const category = (searchParams.get("category") || "animal").trim();
   const [currentLine, setCurrentLine] = useState(0);
   const [input, setInput] = useState("");
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -36,13 +29,44 @@ const TypingPractice: React.FC = () => {
   const [finished, setFinished] = useState(false);
   const [lineCorrect, setLineCorrect] = useState(false);
   const [isStarted, setIsStarted] = useState(false); // 練習開始状態
+  const [typingData, setTypingData] = useState<{ jp: string; roma: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const target = typingData[currentLine].jp;
-  const targetRoma = typingData[currentLine].roma;
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/prompt?category=${encodeURIComponent(category)}`)
+      .then((res) => res.json())
+      .then((response) => {
+        // 新しいJson形式: { text: "...json string..." }
+        if (response && typeof response.text === "string") {
+          try {
+            // 先頭・末尾の ```json ... ``` を除去
+            let jsonText = response.text.trim();
+            if (jsonText.startsWith("```json")) {
+              jsonText = jsonText.replace(/^```json\n?/, "");
+            }
+            if (jsonText.endsWith("```")) {
+              jsonText = jsonText.replace(/```$/, "");
+            }
+            // パース
+            const data = JSON.parse(jsonText);
+            setTypingData(data);
+          } catch (e) {
+            console.error("Error parsing typing data text:", e, response.text);
+          }
+        } else {
+          console.error("Unexpected response structure", response);
+        }
+      })
+      .catch((error) =>
+        console.error("Error fetching typing data:", error)
+      );
+  }, [category]);
+
+  const target = typingData[currentLine]?.jp;
+  const targetRoma = typingData[currentLine]?.roma;
   const isCorrect = input === targetRoma;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (inputRef.current && isStarted) inputRef.current.focus();
   }, [currentLine, isStarted]);
 
@@ -50,7 +74,7 @@ const TypingPractice: React.FC = () => {
     if (!isStarted) return; // 開始前は入力不可
     setInput(val);
     setTotalCount(totalCount + 1);
-    setLineCorrect(val === targetRoma.substring(0, val.length));
+    setLineCorrect(val === targetRoma?.substring(0, val.length));
     // 正しい文字数カウント（日本語1文字単位）
     let correct = 0;
     for (let i = 0; i < val.length; i++) {
@@ -82,10 +106,12 @@ const TypingPractice: React.FC = () => {
   };
 
   // 終了後の集計
-  let cps = 0, accuracy = 0, evalStr = "";
+  let cps = 0,
+    accuracy = 0,
+    evalStr = "";
   if (finished && startTime && endTime) {
     const sec = (endTime - startTime) / 1000;
-    const totalRomaChars = typingData.map(d => d.roma).join("").length;
+    const totalRomaChars = typingData.map((d) => d.roma).join("").length;
     cps = Math.round(totalRomaChars / sec);
     accuracy = Math.round((correctCount / totalRomaChars) * 100);
     evalStr = getEvaluation(cps);
@@ -94,46 +120,159 @@ const TypingPractice: React.FC = () => {
   // キーボードハイライト用CSSを追加
   useEffect(() => {
     const style = document.createElement("style");
-    style.innerHTML = `.hg-button-active { background: #ffe066 !important; color: #222 !important; box-shadow: 0 0 8px #ffe066; }`;
+    style.innerHTML =
+      ".hg-button-active { background: #ffe066 !important; color: #222 !important; box-shadow: 0 0 8px #ffe066; }";
     document.head.appendChild(style);
-    return () => { document.head.removeChild(style); };
+    return () => {
+      document.head.removeChild(style);
+    };
   }, []);
 
+  if (typingData.length === 0) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          background: "#fafbfc",
+        }}
+      >
+        <Header />
+        <main
+          style={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "#222", letterSpacing: "0.05em" }}>
+              {"Loading".split("").map((ch, i) => (
+                <span
+                  key={i}
+                  className="loading-bounce"
+                  style={{
+                    display: "inline-block",
+                    animationDelay: `${i * 0.1}s`,
+                    marginRight: ch === "g" ? 0 : 2,
+                  }}
+                >
+                  {ch}
+                </span>
+              ))}
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#fafbfc" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#fafbfc",
+      }}
+    >
       <Header />
-      <main style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
-        <div style={{ maxWidth: 480, width: "100%", background: "#fff", border: "1px solid #eaeaea", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.04)", padding: 32, color: "#222" }}>
-          <h2 style={{ fontFamily: "var(--font-geist-sans)", fontWeight: 700, fontSize: 28, marginBottom: 24, textAlign: "center", color: "#222" }}>タイピング練習</h2>
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 480,
+            width: "100%",
+            background: "#fff",
+            border: "1px solid #eaeaea",
+            borderRadius: 12,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            padding: 32,
+            color: "#222",
+          }}
+        >
+          <h2
+            style={{
+              fontFamily: "var(--font-geist-sans)",
+              fontWeight: 700,
+              fontSize: 28,
+              marginBottom: 24,
+              textAlign: "center",
+              color: "#222",
+            }}
+          >
+            タイピング練習
+          </h2>
           {!finished ? (
             <>
-              <div style={{ marginBottom: 12, textAlign: "center", color: "#222" }}>
-                <span>練習 {currentLine + 1} / {typingData.length}</span>
+              <div
+                style={{
+                  marginBottom: 12,
+                  textAlign: "center",
+                  color: "#222",
+                }}
+              >
+                <span>
+                  練習 {currentLine + 1} / {typingData.length}
+                </span>
               </div>
-              <div style={{
-                padding: "14px 18px",
-                background: isCorrect ? "#e6fff2" : "#f7f7f7",
-                border: isCorrect ? "1.5px solid #7be495" : "1.5px solid #eaeaea",
-                borderRadius: 8,
-                fontSize: 26,
-                marginBottom: 8,
-                letterSpacing: "0.05em",
-                textAlign: "center",
-                color: "#222"
-              }}>
+              <div
+                style={{
+                  padding: "14px 18px",
+                  background: isCorrect ? "#e6fff2" : "#f7f7f7",
+                  border: isCorrect
+                    ? "1.5px solid #7be495"
+                    : "1.5px solid #eaeaea",
+                  borderRadius: 8,
+                  fontSize: 26,
+                  marginBottom: 8,
+                  letterSpacing: "0.05em",
+                  textAlign: "center",
+                  color: "#222",
+                }}
+              >
                 <div style={{ fontWeight: 700 }}>{target}</div>
-                <div style={{ fontWeight: 700, marginTop: 4 }}>
-                  {targetRoma.split('').map((char, idx) => (
-                    <span key={idx} style={{ backgroundColor: input[idx] === char ? "#ffe066" : "transparent" }}>{char}</span>
+                <div style={{ fontWeight: 700, marginTop: 4, wordBreak: "break-all", overflowWrap: "anywhere" }}>
+                  {targetRoma?.split("").map((char, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        display: "inline-block",
+                        backgroundColor:
+                          input[idx] === char ? "#ffe066" : "transparent",
+                      }}
+                    >
+                      {char}
+                    </span>
                   ))}
                 </div>
               </div>
               <input
                 ref={inputRef}
                 value={input}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  handleInputChange(e.target.value)
+                }
                 onKeyDown={handleKeyDown}
-                style={{ fontSize: 22, width: "100%", padding: "10px 12px", marginBottom: 18, borderRadius: 6, border: "1px solid #eaeaea", outline: "none", boxSizing: "border-box" }}
+                style={{
+                  fontSize: 22,
+                  width: "100%",
+                  padding: "10px 12px",
+                  marginBottom: 18,
+                  borderRadius: 6,
+                  border: "1px solid #eaeaea",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
                 disabled={finished}
                 placeholder={isStarted ? "ここに入力..." : "エンターキーで開始"}
               />
@@ -144,24 +283,35 @@ const TypingPractice: React.FC = () => {
                       "` 1 2 3 4 5 6 7 8 9 0 - = {bksp}",
                       "{tab} q w e r t y u i o p [ ] \\",
                       "{lock} a s d f g h j k l ; ' {enter}",
-                      "{shift} z x c v b n m , . / {shift}"
-                    ]
+                      "{shift} z x c v b n m , . / {shift}",
+                    ],
                   }}
-                  display={typeof target === "string" ? target.split("").reduce((acc, c) => ({ ...acc, [c]: c }), {}) : {}}
+                  display={
+                    typeof target === "string"
+                      ? target.split("").reduce(
+                          (acc, c) => ({ ...acc, [c]: c }),
+                          {}
+                        )
+                      : {}
+                  }
                   onChange={handleInputChange}
                   value={input}
                   theme={"hg-theme-default hg-layout-default myTheme"}
                   buttonTheme={(() => {
-                    // 開始前はエンターキーのみ色変更
                     if (!isStarted) {
-                      return [{ class: "hg-button-active", buttons: "{enter}" }];
+                      return [
+                        { class: "hg-button-active", buttons: "{enter}" },
+                      ];
                     }
-                    // キーボード上に存在するキーのみハイライト
-                    const keyboardKeys = "`1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./".split("");
+                    const keyboardKeys = "`1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./".split(
+                      ""
+                    );
                     const latestChar = input.slice(-1);
                     if (!latestChar) return [];
                     if (keyboardKeys.includes(latestChar.toLowerCase())) {
-                      return [{ class: "hg-button-active", buttons: latestChar.toLowerCase() }];
+                      return [
+                        { class: "hg-button-active", buttons: latestChar.toLowerCase() },
+                      ];
                     }
                     return [];
                   })()}
@@ -170,24 +320,51 @@ const TypingPractice: React.FC = () => {
             </>
           ) : (
             <div style={{ textAlign: "center", color: "#222" }}>
-              <h3 style={{ fontSize: 22, marginBottom: 18, color: "#222" }}>結果</h3>
-              <p style={{ fontSize: 18, color: "#222" }}>1秒間の文字入力数: <b style={{ color: "#222" }}>{cps}</b></p>
-              <p style={{ fontSize: 18, color: "#222" }}>正答率: <b style={{ color: "#222" }}>{accuracy}%</b></p>
-              <p style={{ fontSize: 18, color: "#222" }}>評価: <b style={{ color: "#222" }}>{evalStr}</b></p>
-              <button
-                style={{
-                  marginTop: 24,
-                  padding: "10px 32px",
-                  fontSize: 18,
-                  background: "#ffe066",
-                  color: "#222",
-                  border: "none",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontWeight: 700
-                }}
-                onClick={() => window.location.href = "/"}
-              >戻る</button>
+              <h3 style={{ fontSize: 22, marginBottom: 18, color: "#222" }}>
+                結果
+              </h3>
+              <p style={{ fontSize: 18, color: "#222" }}>
+                1秒間の文字入力数: <b style={{ color: "#222" }}>{cps}</b>
+              </p>
+              <p style={{ fontSize: 18, color: "#222" }}>
+                正答率: <b style={{ color: "#222" }}>{accuracy}%</b>
+              </p>
+              <p style={{ fontSize: 18, color: "#222" }}>
+                評価: <b style={{ color: "#222" }}>{evalStr}</b>
+              </p>
+              <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+                <button
+                  style={{
+                    padding: "10px 24px",
+                    fontSize: 16,
+                    background: "#4f9cff",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                  onClick={() => (window.location.href = `/typing?category=${encodeURIComponent(category)}`)}
+                  title={`同じカテゴリー(${category})で再開`}
+                >
+                  同じカテゴリーで続ける
+                </button>
+                <button
+                  style={{
+                    padding: "10px 24px",
+                    fontSize: 16,
+                    background: "#ffe066",
+                    color: "#222",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                  onClick={() => (window.location.href = "/")}
+                >
+                  戻る
+                </button>
+              </div>
             </div>
           )}
         </div>
