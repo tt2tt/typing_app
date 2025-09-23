@@ -1,12 +1,20 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+// 必要なReactフックやコンポーネントをインポート
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import Keyboard from "react-simple-keyboard";
-import "react-simple-keyboard/build/css/index.css";
+import TypingPrompt from "./components/TypingPrompt";
+import TypingKeyboard from "./components/TypingKeyboard";
+import TypingResult from "./components/TypingResult";
+import TypingLoading from "./components/TypingLoading";
+import TypingError from "./components/TypingError";
 
+// 型定義：タイピング1行分のデータ
+type TypingItem = { kanji: string; romaji: string };
+
+// スコア評価関数
 const getEvaluation = (cps: number) => {
   if (cps >= 7) return "S";
   if (cps >= 6) return "A";
@@ -17,107 +25,199 @@ const getEvaluation = (cps: number) => {
   return "F";
 };
 
-const TypingPractice: React.FC = () => {
-  const searchParams = useSearchParams();
-  const category = (searchParams.get("category") || "animal").trim();
-  const [currentLine, setCurrentLine] = useState(0);
-  const [input, setInput] = useState("");
-  const [startTime, setStartTime] = useState<number | null>(null);
-  const [endTime, setEndTime] = useState<number | null>(null);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const [lineCorrect, setLineCorrect] = useState(false);
-  const [isStarted, setIsStarted] = useState(false); // 練習開始状態
-  const [typingData, setTypingData] = useState<{ jp: string; roma: string }[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+// APIレスポンスを安全にパースする関数
+const parseTypingResponse = (response: any): TypingItem[] => {
+  // レスポンスの成形
+  try {
+    // 配列ならそのまま使用
+    if (Array.isArray(response)) return response as TypingItem[];
+
+    // テキストをJsonに変更
+    if (response && typeof response.text === "string") {
+      let jsonText = response.text.trim();
+      if (jsonText.startsWith("```json")) jsonText = jsonText.replace(/^```json\n?/, "");
+      if (jsonText.endsWith("```")) jsonText = jsonText.replace(/```$/, "");
+      const data = JSON.parse(jsonText);
+      return Array.isArray(data) ? (data as TypingItem[]) : [];
+    }
+  } catch (e) {
+    console.error("Error parsing typing data:", e, response);
+  }
+  return [];
+};
+
+// タイピングデータを取得するカスタムフック（中断・エラー対応）
+const useTypingData = (category: string) => {
+  // useStateの定義
+  const [data, setData] = useState<TypingItem[]>([]); // タイピングデータ
+  const [loading, setLoading] = useState(true); // ローディング状態
+  const [error, setError] = useState<string | null>(null); // タイピングデータの取得エラー
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_BASE}/api/prompt?category=${encodeURIComponent(category)}`)
-      .then((res) => res.json())
-      .then((response) => {
-        // 新しいJson形式: { text: "...json string..." }
-        if (response && typeof response.text === "string") {
-          try {
-            // 先頭・末尾の ```json ... ``` を除去
-            let jsonText = response.text.trim();
-            if (jsonText.startsWith("```json")) {
-              jsonText = jsonText.replace(/^```json\n?/, "");
-            }
-            if (jsonText.endsWith("```")) {
-              jsonText = jsonText.replace(/```$/, "");
-            }
-            // パース
-            const data = JSON.parse(jsonText);
-            setTypingData(data);
-          } catch (e) {
-            console.error("Error parsing typing data text:", e, response.text);
-          }
-        } else {
-          console.error("Unexpected response structure", response);
-        }
-      })
-      .catch((error) =>
-        console.error("Error fetching typing data:", error)
-      );
+    // AbortControllerのインスタンスを作成
+    const ac = new AbortController();
+    const fetchData = async () => {
+
+      // useStateの初期化
+      setLoading(true);
+      setError(null);
+
+      try {
+        // タイピングデータの取得
+        const url = `${process.env.NEXT_PUBLIC_API_BASE}/api/prompt?category=${encodeURIComponent(category)}`;
+        const res = await fetch(url, { signal: ac.signal });
+        const body = await res.json();
+
+        // レスポンスの成形
+        const items = parseTypingResponse(body);
+
+        // タイピングデータの更新
+        setData(items);
+      
+      // エラーの場合はローディングを中止
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        console.error("Error fetching typing data:", err);
+        setError("データの取得に失敗しました。");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+    return () => ac.abort();
   }, [category]);
 
-  const target = typingData[currentLine]?.jp;
-  const targetRoma = typingData[currentLine]?.roma;
+  return { data, loading, error } as const;
+};
+
+// タイピング進行・状態管理用カスタムフック
+const useTypingSession = (typingData: TypingItem[]) => {
+  // useStateの定義
+  const [currentLine, setCurrentLine] = useState(0); // 現在の行番号
+  const [input, setInput] = useState(""); // 入力中の文字列
+  const [startTime, setStartTime] = useState<number | null>(null); // 開始時刻（ミリ秒）
+  const [endTime, setEndTime] = useState<number | null>(null); // 終了時刻（ミリ秒）
+  const [correctCount, setCorrectCount] = useState(0); // 正しく入力できた文字数の合計
+  const [finished, setFinished] = useState(false); // タイピング終了フラグ
+  const [isStarted, setIsStarted] = useState(false); // タイピング開始フラグ
+  const inputRef = useRef<HTMLInputElement>(null); // 入力欄への参照
+  const prevCorrectRef = useRef(0); // 現在の行における直近の正答数（差分更新用）
+
+  // useStateの初期化
+  useEffect(() => {
+    setCurrentLine(0);
+    setInput("");
+    setStartTime(null);
+    setEndTime(null);
+    setCorrectCount(0);
+    setFinished(false);
+    setIsStarted(false);
+    prevCorrectRef.current = 0;
+  }, [typingData]);
+
+  // 現在の行のデータを設定
+  const target = typingData[currentLine]?.kanji ?? "";
+  const targetRoma = typingData[currentLine]?.romaji ?? "";
   const isCorrect = input === targetRoma;
 
+  // 常に入力欄にフォーカスする
   useEffect(() => {
     if (inputRef.current && isStarted) inputRef.current.focus();
   }, [currentLine, isStarted]);
 
-  const handleInputChange = (val: string) => {
-    if (!isStarted) return; // 開始前は入力不可
-    setInput(val);
-    setTotalCount(totalCount + 1);
-    setLineCorrect(val === targetRoma?.substring(0, val.length));
-    // 正しい文字数カウント（日本語1文字単位）
-    let correct = 0;
-    for (let i = 0; i < val.length; i++) {
-      if (val[i] === targetRoma[i]) correct++;
-    }
-    setCorrectCount(correctCount + (correct - input.length));
-    if (!startTime && val.length > 0) setStartTime(Date.now());
-    if (val === targetRoma) {
-      if (currentLine < typingData.length - 1) {
-        setTimeout(() => {
-          setCurrentLine(currentLine + 1);
-          setInput("");
-        }, 500);
-      } else {
-        setEndTime(Date.now());
-        setFinished(true);
-      }
-    }
-  };
+  // ユーザー入力を受け取るコールバック関数
+  const handleInputChange = useCallback(
+    (val: string) => {
+      // 開始前は処理しない
+      if (!isStarted) return;
+      setInput(val);
 
-  // エンターキー押下で練習開始
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // 先頭から一致する正しい文字数をカウント
+  let correct = 0;
+      const len = Math.min(val.length, targetRoma.length);
+      for (let i = 0; i < len; i++) {
+        if (val[i] === targetRoma[i]) correct++;
+        else break; // 先頭一致のみをカウント
+      }
+
+      // 差分だけ全体正答数に加算
+      const delta = correct - prevCorrectRef.current;
+      if (delta !== 0) setCorrectCount((c) => c + delta);
+      prevCorrectRef.current = correct;
+      
+      // 開始時間の設定
+      if (!startTime && val.length > 0) setStartTime(Date.now());
+
+      // 完全一致した場合、次の行へ（最後の行なら終了）
+      if (val === targetRoma) {
+        if (currentLine < typingData.length - 1) {
+          setTimeout(() => {
+            setCurrentLine((i) => i + 1);
+            setInput("");
+            prevCorrectRef.current = 0; // 次の行用にリセット
+          }, 500);
+        } else {
+          setEndTime(Date.now());
+          setFinished(true);
+        }
+      }
+    },
+    [isStarted, startTime, targetRoma, currentLine, typingData.length]
+  );
+
+  // タイピングの開始
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isStarted && e.key === "Enter") {
       setIsStarted(true);
       setTimeout(() => {
         if (inputRef.current) inputRef.current.focus();
       }, 100);
     }
-  };
+  }, [isStarted]);
 
-  // 終了後の集計
-  let cps = 0,
-    accuracy = 0,
-    evalStr = "";
-  if (finished && startTime && endTime) {
+  // 集計（スコア・正答率など）
+  const stats = useMemo(() => {
+    if (!finished || !startTime || !endTime) return { cps: 0, accuracy: 0, evalStr: "" };
     const sec = (endTime - startTime) / 1000;
-    const totalRomaChars = typingData.map((d) => d.roma).join("").length;
-    cps = Math.round(totalRomaChars / sec);
-    accuracy = Math.round((correctCount / totalRomaChars) * 100);
-    evalStr = getEvaluation(cps);
-  }
+    const totalRomaChars = typingData.map((d) => d.romaji).join("").length;
+    const cps = Math.round(totalRomaChars / sec);
+    const accuracy = Math.round((correctCount / totalRomaChars) * 100);
+    const evalStr = getEvaluation(cps);
+    return { cps, accuracy, evalStr };
+  }, [finished, startTime, endTime, typingData, correctCount]);
 
-  // キーボードハイライト用CSSを追加
+  return {
+    // state
+    currentLine,
+    input,
+    startTime,
+    endTime,
+    correctCount,
+    finished,
+    isStarted,
+    inputRef,
+    // derived
+    target,
+    targetRoma,
+    isCorrect,
+    stats,
+    // handlers
+    handleInputChange,
+    handleKeyDown,
+    setIsStarted,
+  } as const;
+};
+
+// メインのタイピング練習ページコンポーネント
+const TypingPractice: React.FC = () => {
+  // 使用するカテゴリーの取得
+  const searchParams = useSearchParams();
+  const category = (searchParams.get("category") || "animal").trim();
+
+  const { data: typingData, loading, error } = useTypingData(category);
+  const session = useTypingSession(typingData);
+
+  // キーボードハイライト用のスタイルを動的に追加
   useEffect(() => {
     const style = document.createElement("style");
     style.innerHTML =
@@ -128,48 +228,11 @@ const TypingPractice: React.FC = () => {
     };
   }, []);
 
-  if (typingData.length === 0) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          background: "#fafbfc",
-        }}
-      >
-        <Header />
-        <main
-          style={{
-            flex: 1,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: "#222", letterSpacing: "0.05em" }}>
-              {"Loading".split("").map((ch, i) => (
-                <span
-                  key={i}
-                  className="loading-bounce"
-                  style={{
-                    display: "inline-block",
-                    animationDelay: `${i * 0.1}s`,
-                    marginRight: ch === "g" ? 0 : 2,
-                  }}
-                >
-                  {ch}
-                </span>
-              ))}
-            </div>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+  // ローディング・エラー時の分岐
+  if (loading) return <TypingLoading />;
+  if (error || typingData.length === 0) return <TypingError message={error ?? "データが見つかりませんでした。"} />;
 
+  // JSX: タイピング練習画面のレイアウト
   return (
     <div
       style={{
@@ -212,7 +275,7 @@ const TypingPractice: React.FC = () => {
           >
             タイピング練習
           </h2>
-          {!finished ? (
+          {!session.finished ? (
             <>
               <div
                 style={{
@@ -222,47 +285,22 @@ const TypingPractice: React.FC = () => {
                 }}
               >
                 <span>
-                  練習 {currentLine + 1} / {typingData.length}
+                  練習 {session.currentLine + 1} / {typingData.length}
                 </span>
               </div>
-              <div
-                style={{
-                  padding: "14px 18px",
-                  background: isCorrect ? "#e6fff2" : "#f7f7f7",
-                  border: isCorrect
-                    ? "1.5px solid #7be495"
-                    : "1.5px solid #eaeaea",
-                  borderRadius: 8,
-                  fontSize: 26,
-                  marginBottom: 8,
-                  letterSpacing: "0.05em",
-                  textAlign: "center",
-                  color: "#222",
-                }}
-              >
-                <div style={{ fontWeight: 700 }}>{target}</div>
-                <div style={{ fontWeight: 700, marginTop: 4, wordBreak: "break-all", overflowWrap: "anywhere" }}>
-                  {targetRoma?.split("").map((char, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        display: "inline-block",
-                        backgroundColor:
-                          input[idx] === char ? "#ffe066" : "transparent",
-                      }}
-                    >
-                      {char}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <TypingPrompt
+                targetKanji={session.target}
+                targetRomaji={session.targetRoma}
+                input={session.input}
+                isCorrect={session.isCorrect}
+              />
               <input
-                ref={inputRef}
-                value={input}
+                ref={session.inputRef}
+                value={session.input}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleInputChange(e.target.value)
+                  session.handleInputChange(e.target.value)
                 }
-                onKeyDown={handleKeyDown}
+                onKeyDown={session.handleKeyDown}
                 style={{
                   fontSize: 22,
                   width: "100%",
@@ -273,99 +311,27 @@ const TypingPractice: React.FC = () => {
                   outline: "none",
                   boxSizing: "border-box",
                 }}
-                disabled={finished}
-                placeholder={isStarted ? "ここに入力..." : "エンターキーで開始"}
+                disabled={session.finished}
+                placeholder={session.isStarted ? "ここに入力..." : "エンターキーで開始"}
               />
               <div style={{ marginBottom: 12 }}>
-                <Keyboard
-                  layout={{
-                    default: [
-                      "` 1 2 3 4 5 6 7 8 9 0 - = {bksp}",
-                      "{tab} q w e r t y u i o p [ ] \\",
-                      "{lock} a s d f g h j k l ; ' {enter}",
-                      "{shift} z x c v b n m , . / {shift}",
-                    ],
-                  }}
-                  display={
-                    typeof target === "string"
-                      ? target.split("").reduce(
-                          (acc, c) => ({ ...acc, [c]: c }),
-                          {}
-                        )
-                      : {}
-                  }
-                  onChange={handleInputChange}
-                  value={input}
-                  theme={"hg-theme-default hg-layout-default myTheme"}
-                  buttonTheme={(() => {
-                    if (!isStarted) {
-                      return [
-                        { class: "hg-button-active", buttons: "{enter}" },
-                      ];
-                    }
-                    const keyboardKeys = "`1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./".split(
-                      ""
-                    );
-                    const latestChar = input.slice(-1);
-                    if (!latestChar) return [];
-                    if (keyboardKeys.includes(latestChar.toLowerCase())) {
-                      return [
-                        { class: "hg-button-active", buttons: latestChar.toLowerCase() },
-                      ];
-                    }
-                    return [];
-                  })()}
+                <TypingKeyboard
+                  targetLabel={session.target}
+                  input={session.input}
+                  isStarted={session.isStarted}
+                  onChange={session.handleInputChange}
                 />
               </div>
             </>
           ) : (
-            <div style={{ textAlign: "center", color: "#222" }}>
-              <h3 style={{ fontSize: 22, marginBottom: 18, color: "#222" }}>
-                結果
-              </h3>
-              <p style={{ fontSize: 18, color: "#222" }}>
-                1秒間の文字入力数: <b style={{ color: "#222" }}>{cps}</b>
-              </p>
-              <p style={{ fontSize: 18, color: "#222" }}>
-                正答率: <b style={{ color: "#222" }}>{accuracy}%</b>
-              </p>
-              <p style={{ fontSize: 18, color: "#222" }}>
-                評価: <b style={{ color: "#222" }}>{evalStr}</b>
-              </p>
-              <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
-                <button
-                  style={{
-                    padding: "10px 24px",
-                    fontSize: 16,
-                    background: "#4f9cff",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 700,
-                  }}
-                  onClick={() => (window.location.href = `/typing?category=${encodeURIComponent(category)}`)}
-                  title={`同じカテゴリー(${category})で再開`}
-                >
-                  同じカテゴリーで続ける
-                </button>
-                <button
-                  style={{
-                    padding: "10px 24px",
-                    fontSize: 16,
-                    background: "#ffe066",
-                    color: "#222",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 700,
-                  }}
-                  onClick={() => (window.location.href = "/")}
-                >
-                  戻る
-                </button>
-              </div>
-            </div>
+            <TypingResult
+              cps={session.stats.cps}
+              accuracy={session.stats.accuracy}
+              evalStr={session.stats.evalStr}
+              onRetry={() => (window.location.href = `/typing?category=${encodeURIComponent(category)}`)}
+              onBack={() => (window.location.href = "/")}
+              categoryLabel={category}
+            />
           )}
         </div>
       </main>

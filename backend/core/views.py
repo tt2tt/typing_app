@@ -1,35 +1,22 @@
-from django.http import JsonResponse  # JSONレスポンス用
-import logging  # ログ出力用
+import logging
 import os
 import json
 import re
+
+from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from openai import OpenAI
 from pykakasi import kakasi as _kakasi
 
 # ヘルスチェック用のビュー
 def health(request):
-    logging.info("health endpoint accessed")  # テスト用ログ出力
-    data = [
-        {"jp": "こんにちは", "roma": "konnichiwa"},
-        {"jp": "おはようございます", "roma": "ohayougozaimasu"},
-        {"jp": "タイピング練習", "roma": "taipingu renshuu"},
-        {"jp": "プログラミング", "roma": "puroguramingu"},
-        {"jp": "人工知能", "roma": "jinkou chinou"},
-        {"jp": "日本語入力", "roma": "nihongo nyuuryoku"},
-        {"jp": "開発環境", "roma": "kaihatsu kankyou"}
-    ]
-    response_data = {
-        "status": "success",
-        # "message": "Health check OK",
-        "data": data
-    }
-    return JsonResponse(response_data)
+    logging.info("health endpoint accessed")
+    return JsonResponse({"ok": True})
 
 # OpenAIクライアント初期化（環境変数からAPIキーを取得）
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# pykakasi converter (module-level, reused)
+# pykakasiの設定
 _kk = _kakasi()
 _kk.setMode("H", "a")  # ひらがな -> ローマ字
 _kk.setMode("K", "a")  # カタカナ -> ローマ字（保険）
@@ -43,7 +30,10 @@ def prompt(request):
     GET /api/prompt?category=animal
     ChatGPT APIを使って短文を生成して返す
     """
+    # URLからカテゴリーを受け取る
     category = request.GET.get("category", "animal")
+
+    # AIへの依頼文
     user_prompt = (
         f"""{category}に関連するタイピング練習用のデータとして、
         短い日本語の文章と、その漢字表記をペアにして、合計300～350文字程度作成してください。
@@ -55,11 +45,12 @@ def prompt(request):
         }}
         """
     )
-    # 利用するモデルを環境変数で切り替え可能に（デフォルトは安価な mini 系）
+
+    # 利用するモデル
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     try:
-        # Chat Completions API は messages が必須
+        # レスポンスの受け取り
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": user_prompt}],
@@ -67,6 +58,7 @@ def prompt(request):
             max_completion_tokens=700,
         )
 
+        
         # モデル出力（コードフェンスや余計な文言を除去）
         raw = resp.choices[0].message.content.strip() if resp.choices else ""
         json_text = raw.strip()
@@ -81,7 +73,8 @@ def prompt(request):
         except Exception:
             # 万一JSONでない場合はそのまま返す（後方互換）
             return JsonResponse({"text": raw})
-
+        
+        # 辞書型に変換
         if isinstance(payload, dict):
             items = payload.get("data") or payload.get("items") or [payload]
         else:
@@ -94,11 +87,12 @@ def prompt(request):
         for it in items:
             if not isinstance(it, dict):
                 continue
+            # ひらがな、漢字・生成
             hira = it.get("hiragana") or it.get("yomi") or it.get("kana")
             kanji = it.get("kanji") or it.get("jp") or it.get("text") or it.get("sentence")
+            
+            # ローマ字変換
             romaji = _conv.do(hira) if isinstance(hira, str) else ""
-
-            # 句読点変換
             if isinstance(romaji, str):
                 romaji = romaji.replace("、", ",").replace("。", ".")
                 # nの後ろがa,i,u,e,o以外の場合nnに変換
@@ -106,9 +100,6 @@ def prompt(request):
 
             # 元JSONへ romaji を付与
             it["romaji"] = romaji
-            # フロント互換フィールドも同梱（表示=kanji、タイプ対象=romaji）
-            it["jp"] = kanji if isinstance(kanji, str) else (hira or "")
-            it["roma"] = romaji
             enriched.append(it)
 
         # 既存フロントは { text: "<JSON文字列>" } を期待しているため維持
