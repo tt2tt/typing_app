@@ -38,3 +38,6 @@ yarn-error.log*
 # --- TypeScript関連 ---
 *.tsbuildinfo
 next-env.d.ts
+
+# --- Python関連 ---
+__pycache__

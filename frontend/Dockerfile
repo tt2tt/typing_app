@@ -16,11 +16,8 @@ COPY . .
 # ログディレクトリを作成
 RUN mkdir -p /app/log
 
-# Next.jsアプリをビルド
-RUN npm run build
-
- # ポート3000を公開
+# ポート3000を公開
 EXPOSE 3000
 
 # アプリケーションを起動
-CMD ["npm", "start"]
+CMD [ "sh", "-c", "if [ \"$NODE_ENV\" = 'production' ]; then npm run build && npm start; else npm run dev; fi" ]

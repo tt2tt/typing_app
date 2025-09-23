@@ -10,9 +10,15 @@ services:
     # APIのベースURL
     environment:
       - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
+      - NODE_ENV=${NODE_ENV}
     # backendサービス起動後に起動
     depends_on:
       - backend
+    # コンテナ内と連動
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/next.config.ts:/app/next.config.ts
 
   # Djangoバックエンドサービス
   backend:
@@ -28,6 +34,7 @@ services:
       - DB_PASS=${DB_PASS} # DBパスワード
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY} # Djangoシークレットキー
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS} # 許可ホスト
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     # dbサービス起動後に起動
     depends_on:
       - db
@@ -39,6 +46,8 @@ services:
         fi && \
         ./wait-for-it.sh db:3306 --timeout=60 --strict -- \
           bash -c 'python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000'"
+    volumes:
+      - ./backend:/app
 
   # MySQLデータベースサービス
   db:

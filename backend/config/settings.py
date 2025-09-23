@@ -1,9 +1,6 @@
 from pathlib import Path
 import os
 
-from dotenv import load_dotenv
-load_dotenv(os.path.join(Path(__file__).resolve().parent.parent.parent, '.env'))
-
 
 # プロジェクトのベースディレクトリ
 BASE_DIR = Path(__file__).resolve().parent.parent
