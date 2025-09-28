@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signup } from "@/lib/auth";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -17,6 +18,7 @@ export default function SignupPage() {
   const [msg, setMsg] = useState<string | null>(null);
   // ローディング状態
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
 
   // フォーム送信時の処理
@@ -27,9 +29,8 @@ export default function SignupPage() {
     try {
       // サインアップAPI呼び出し
       const user = await signup({ email, password, username: username || undefined });
-      setMsg(`ようこそ、${user.username} さん（ログイン済み）`);
-      // 入力値リセット
-      setEmail(""); setUsername(""); setPassword("");
+      // 成功したらトップへ遷移
+      router.push("/");
     } catch (e: any) {
       // エラーメッセージ表示
       setMsg(e.message);
