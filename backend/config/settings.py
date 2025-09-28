@@ -13,6 +13,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
 # 許可するホスト（.envからカンマ区切りで取得）
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+
 # CORS許可オリジン（.envからカンマ区切りで取得）
 CORS_ALLOWED_ORIGINS = os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",") if os.getenv("DJANGO_CORS_ALLOWED_ORIGINS") else []
 CORS_ALLOW_ALL_ORIGINS = not CORS_ALLOWED_ORIGINS
@@ -27,6 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles", # 静的ファイル管理
     "rest_framework", # Django REST framework
     "corsheaders", # CORS対応
+    "accounts", # 認証API
 ]
 
 # ミドルウェアの設定
@@ -113,3 +115,24 @@ LOGGING = {
         },
     },
 }
+
+# CSRFとセッションの設定
+# 環境変数のカンマ区切り文字列を配列に変換するヘルパ
+def _env_list(name: str):
+    raw = os.getenv(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+# 優先: DJANGO_CSRF_TRUSTED_ORIGINS -> 次点: DJANGO_CORS_ALLOWED_ORIGINS -> 開発用デフォルト
+CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS") or _env_list("DJANGO_CORS_ALLOWED_ORIGINS")
+if not CSRF_TRUSTED_ORIGINS and DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
+# リダイレクトを避けるため末尾スラッシュの自動付与を無効化
+APPEND_SLASH = False

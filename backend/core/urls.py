@@ -3,6 +3,6 @@ from .views import health, prompt  # healthビューとpromptビューをイン�
 
 # このアプリのURLパターン定義
 urlpatterns = [
-	path("health/", health),  # /health/ でhealthビューを呼び出す
-    path("prompt/", prompt),
+	path("health", health),  # /health/ でhealthビューを呼び出す
+    path("prompt", prompt),
 ]
