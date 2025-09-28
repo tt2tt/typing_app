@@ -64,7 +64,7 @@ const useTypingData = (category: string) => {
 
       try {
         // タイピングデータの取得
-        const url = `${process.env.NEXT_PUBLIC_API_BASE}/api/prompt?category=${encodeURIComponent(category)}`;
+        const url = `/api/prompt/?category=${encodeURIComponent(category)}`;
         const res = await fetch(url, { signal: ac.signal });
         const body = await res.json();
 

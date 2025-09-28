@@ -1,12 +1,15 @@
 // Next.jsの型定義をインポート
 import type { NextConfig } from "next";
 
-
-// Next.jsの設定オブジェクト
+// NEXT_PUBLIC_API_BASE 環境変数を利用してAPIリライト先を動的に切り替え
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://backend:8000";
 const nextConfig: NextConfig = {
-  // ここに各種設定オプションを記述
+  async rewrites() {
+    return [
+      { source: "/api/:path*", destination: `${API_BASE}/api/:path*` },
+    ];
+  },
 };
-
 
 // 設定をエクスポート
 export default nextConfig;
