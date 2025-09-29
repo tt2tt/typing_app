@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "rest_framework", # Django REST framework
     "corsheaders", # CORS対応
     "accounts", # 認証API
+    "core", # タイピング機能（モデルを含む）
 ]
 
 # ミドルウェアの設定
@@ -88,6 +89,9 @@ USE_TZ = True
 
 # 静的ファイルのURL
 STATIC_URL = "static/"
+
+# プライマリーキーの設定
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ログ設定（django.logに出力）
 LOGGING = {

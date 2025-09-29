@@ -10,6 +10,7 @@ import TypingKeyboard from "./components/TypingKeyboard";
 import TypingResult from "./components/TypingResult";
 import TypingLoading from "./components/TypingLoading";
 import TypingError from "./components/TypingError";
+import { useRouter } from "next/navigation";
 
 // 型定義：タイピング1行分のデータ
 type TypingItem = { kanji: string; romaji: string };
@@ -213,9 +214,47 @@ const TypingPractice: React.FC = () => {
   // 使用するカテゴリーの取得
   const searchParams = useSearchParams();
   const category = (searchParams.get("category") || "animal").trim();
+  const router = useRouter();
 
   const { data: typingData, loading, error } = useTypingData(category);
   const session = useTypingSession(typingData);
+
+  // 終了時に結果を保存（ログイン済みなら）
+  useEffect(() => {
+    if (!session.finished) return;
+    const save = async () => {
+      // CSRFトークン取得
+      const m = typeof document !== 'undefined' ? document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
+      let csrftoken = m ? decodeURIComponent(m[1]) : '';
+
+      // まだCSRFクッキーがない場合は取得
+      if (!csrftoken) {
+        try { await fetch('/api/auth/csrf/', { credentials: 'include' }); } catch {}
+        const m2 = typeof document !== 'undefined' ? document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
+        csrftoken = m2 ? decodeURIComponent(m2[1]) : '';
+      }
+      try {
+        await fetch('/api/auth/me/', { credentials: 'include' }); // セッション確認用（クッキー送信）
+        const res = await fetch('/api/result/', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+          },
+          body: JSON.stringify({ cps: session.stats.cps, accuracy: session.stats.accuracy }),
+        });
+        // 未ログイン等は無視
+        if (!res.ok) {
+          // console.debug('save_result skipped', await res.text());
+        }
+      } catch (e) {
+        // 保存は失敗してもアプリ継続
+      }
+    };
+    save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.finished]);
 
   // キーボードハイライト用のスタイルを動的に追加
   useEffect(() => {
