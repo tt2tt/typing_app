@@ -27,7 +27,7 @@ export default function MePage() {
         setLoading(true); // ローディング開始
         setError(null);   // エラー初期化
         // APIからユーザー情報取得
-        const res = await fetch('/api/auth/me', { credentials: 'include' });
+  const res = await fetch('/api/auth/me/', { credentials: 'include' });
         if (!res.ok) throw new Error('未ログインか、取得に失敗しました');
         const json = await res.json();
         setUser(json); // ユーザー情報セット
