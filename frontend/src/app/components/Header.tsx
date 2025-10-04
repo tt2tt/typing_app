@@ -52,7 +52,7 @@ const Header = () => {
           {user ? (
             <>
               {/* ログイン時のリンク */}
-              <Link href="/api/auth/me/" className="underline hover:text-gray-200">me</Link>
+              <Link href="/me" className="underline hover:text-gray-200">me</Link>
               <button onClick={onLogout} className="underline hover:text-gray-200">ログアウト</button>
             </>
           ) : (

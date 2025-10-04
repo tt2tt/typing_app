@@ -99,10 +99,12 @@ const useTypingSession = (typingData: TypingItem[]) => {
   const [startTime, setStartTime] = useState<number | null>(null); // 開始時刻（ミリ秒）
   const [endTime, setEndTime] = useState<number | null>(null); // 終了時刻（ミリ秒）
   const [correctCount, setCorrectCount] = useState(0); // 正しく入力できた文字数の合計
+  const [mistakeCount, setMistakeCount] = useState(0); // 誤入力回数（減算しない）
   const [finished, setFinished] = useState(false); // タイピング終了フラグ
   const [isStarted, setIsStarted] = useState(false); // タイピング開始フラグ
   const inputRef = useRef<HTMLInputElement>(null); // 入力欄への参照
   const prevCorrectRef = useRef(0); // 現在の行における直近の正答数（差分更新用）
+  const prevInputRef = useRef(""); // 直前の入力値（誤入力検出用）
 
   // useStateの初期化
   useEffect(() => {
@@ -111,9 +113,11 @@ const useTypingSession = (typingData: TypingItem[]) => {
     setStartTime(null);
     setEndTime(null);
     setCorrectCount(0);
+    setMistakeCount(0);
     setFinished(false);
     setIsStarted(false);
     prevCorrectRef.current = 0;
+    prevInputRef.current = "";
   }, [typingData]);
 
   // 現在の行のデータを設定
@@ -141,6 +145,21 @@ const useTypingSession = (typingData: TypingItem[]) => {
         else break; // 先頭一致のみをカウント
       }
 
+      // 誤入力のカウント（追加入力のみを対象。削除はカウントしない）
+      const prev = prevInputRef.current;
+      if (val.length > prev.length) {
+        const typed = val.slice(prev.length);
+        // typed された各文字が期待値と一致しない分をカウント
+        for (let i = 0; i < typed.length; i++) {
+          const expected = targetRoma[prev.length + i] ?? "";
+          if (typed[i] !== expected) {
+            setMistakeCount((m) => m + 1);
+          }
+        }
+      }
+      // prevInput 更新
+      prevInputRef.current = val;
+
       // 差分だけ全体正答数に加算
       const delta = correct - prevCorrectRef.current;
       if (delta !== 0) setCorrectCount((c) => c + delta);
@@ -156,6 +175,7 @@ const useTypingSession = (typingData: TypingItem[]) => {
             setCurrentLine((i) => i + 1);
             setInput("");
             prevCorrectRef.current = 0; // 次の行用にリセット
+            prevInputRef.current = ""; // 次の行用にリセット
           }, 500);
         } else {
           setEndTime(Date.now());
@@ -182,10 +202,11 @@ const useTypingSession = (typingData: TypingItem[]) => {
     const sec = (endTime - startTime) / 1000;
     const totalRomaChars = typingData.map((d) => d.romaji).join("").length;
     const cps = Math.round(totalRomaChars / sec);
-    const accuracy = Math.round((correctCount / totalRomaChars) * 100);
+    const totalAttempts = correctCount + mistakeCount;
+    const accuracy = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
     const evalStr = getEvaluation(cps);
     return { cps, accuracy, evalStr };
-  }, [finished, startTime, endTime, typingData, correctCount]);
+  }, [finished, startTime, endTime, typingData, correctCount, mistakeCount]);
 
   return {
     // state

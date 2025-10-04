@@ -6,6 +6,7 @@ from django.views.decorators.http import require_http_methods  # HTTPメソッ�
 from django.contrib.auth import get_user_model, login, authenticate, logout  # 認証/ログイン/ログアウト
 from django.contrib.auth.password_validation import validate_password  # パスワードバリデーション
 from django.core.exceptions import ValidationError  # バリデーション例外
+from core.models import TypingRecord  # 過去のタイピング結果
 
 
 # CSRFトークンをクライアントにセットするエンドポイント
@@ -116,5 +117,22 @@ def logout_view(request):
 def me(request):
     if not request.user.is_authenticated:
         return JsonResponse({"detail": "未ログインです"}, status=401)
+    
     user = request.user
-    return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, status=200)
+    # 直近10件の結果を取得（新しい順→古い順に並べ替えて返す）
+    records_qs = (
+        TypingRecord.objects.filter(user=user)
+        .order_by("-created_at")[:10]
+    )
+
+    # フォーマット
+    records = [
+        {"cps": r.cps, "accuracy": r.accuracy, "created_at": r.created_at.isoformat()}
+        for r in reversed(list(records_qs))
+    ]
+    return JsonResponse({
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "records": records,
+    }, status=200)
