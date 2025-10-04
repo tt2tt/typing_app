@@ -4,7 +4,9 @@ import json
 import re
 
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.csrf import csrf_protect
+from .models import TypingRecord
 from openai import OpenAI
 from pykakasi import kakasi as _kakasi
 
@@ -107,3 +109,37 @@ def prompt(request):
     except Exception as e:
         logging.exception("OpenAI API error on /api/prompt/")
         return JsonResponse({"error": "upstream_error", "detail": str(e)}, status=502)
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+# このビューはPOSTリクエストのみを許可します。
+def save_result(request):
+    # ユーザーが認証済みか確認
+    if not request.user.is_authenticated:
+        return JsonResponse({"detail": "未ログインです"}, status=401)
+
+    # リクエストボディからJSONデータを取得
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+    # cps、accuracyの取得とバリデーション
+    # categoryは無視します
+    cps = int(data.get("cps", 0))
+    accuracy = int(data.get("accuracy", 0))
+
+    # 値の範囲を制限
+    cps = max(0, min(cps, 1000))
+    accuracy = max(0, min(accuracy, 100))
+
+    # タイピング記録を保存
+    rec = TypingRecord.objects.create(user=request.user, cps=cps, accuracy=accuracy)
+
+    # 保存した内容をレスポンスとして返す
+    return JsonResponse({
+        "cps": rec.cps,
+        "accuracy": rec.accuracy,
+        "created_at": rec.created_at.isoformat(),
+    }, status=201)

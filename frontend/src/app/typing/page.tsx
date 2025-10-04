@@ -10,6 +10,7 @@ import TypingKeyboard from "./components/TypingKeyboard";
 import TypingResult from "./components/TypingResult";
 import TypingLoading from "./components/TypingLoading";
 import TypingError from "./components/TypingError";
+import { useRouter } from "next/navigation";
 
 // 型定義：タイピング1行分のデータ
 type TypingItem = { kanji: string; romaji: string };
@@ -98,10 +99,12 @@ const useTypingSession = (typingData: TypingItem[]) => {
   const [startTime, setStartTime] = useState<number | null>(null); // 開始時刻（ミリ秒）
   const [endTime, setEndTime] = useState<number | null>(null); // 終了時刻（ミリ秒）
   const [correctCount, setCorrectCount] = useState(0); // 正しく入力できた文字数の合計
+  const [mistakeCount, setMistakeCount] = useState(0); // 誤入力回数（減算しない）
   const [finished, setFinished] = useState(false); // タイピング終了フラグ
   const [isStarted, setIsStarted] = useState(false); // タイピング開始フラグ
   const inputRef = useRef<HTMLInputElement>(null); // 入力欄への参照
   const prevCorrectRef = useRef(0); // 現在の行における直近の正答数（差分更新用）
+  const prevInputRef = useRef(""); // 直前の入力値（誤入力検出用）
 
   // useStateの初期化
   useEffect(() => {
@@ -110,9 +113,11 @@ const useTypingSession = (typingData: TypingItem[]) => {
     setStartTime(null);
     setEndTime(null);
     setCorrectCount(0);
+    setMistakeCount(0);
     setFinished(false);
     setIsStarted(false);
     prevCorrectRef.current = 0;
+    prevInputRef.current = "";
   }, [typingData]);
 
   // 現在の行のデータを設定
@@ -140,6 +145,21 @@ const useTypingSession = (typingData: TypingItem[]) => {
         else break; // 先頭一致のみをカウント
       }
 
+      // 誤入力のカウント（追加入力のみを対象。削除はカウントしない）
+      const prev = prevInputRef.current;
+      if (val.length > prev.length) {
+        const typed = val.slice(prev.length);
+        // typed された各文字が期待値と一致しない分をカウント
+        for (let i = 0; i < typed.length; i++) {
+          const expected = targetRoma[prev.length + i] ?? "";
+          if (typed[i] !== expected) {
+            setMistakeCount((m) => m + 1);
+          }
+        }
+      }
+      // prevInput 更新
+      prevInputRef.current = val;
+
       // 差分だけ全体正答数に加算
       const delta = correct - prevCorrectRef.current;
       if (delta !== 0) setCorrectCount((c) => c + delta);
@@ -155,6 +175,7 @@ const useTypingSession = (typingData: TypingItem[]) => {
             setCurrentLine((i) => i + 1);
             setInput("");
             prevCorrectRef.current = 0; // 次の行用にリセット
+            prevInputRef.current = ""; // 次の行用にリセット
           }, 500);
         } else {
           setEndTime(Date.now());
@@ -181,10 +202,11 @@ const useTypingSession = (typingData: TypingItem[]) => {
     const sec = (endTime - startTime) / 1000;
     const totalRomaChars = typingData.map((d) => d.romaji).join("").length;
     const cps = Math.round(totalRomaChars / sec);
-    const accuracy = Math.round((correctCount / totalRomaChars) * 100);
+    const totalAttempts = correctCount + mistakeCount;
+    const accuracy = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : 0;
     const evalStr = getEvaluation(cps);
     return { cps, accuracy, evalStr };
-  }, [finished, startTime, endTime, typingData, correctCount]);
+  }, [finished, startTime, endTime, typingData, correctCount, mistakeCount]);
 
   return {
     // state
@@ -213,9 +235,47 @@ const TypingPractice: React.FC = () => {
   // 使用するカテゴリーの取得
   const searchParams = useSearchParams();
   const category = (searchParams.get("category") || "animal").trim();
+  const router = useRouter();
 
   const { data: typingData, loading, error } = useTypingData(category);
   const session = useTypingSession(typingData);
+
+  // 終了時に結果を保存（ログイン済みなら）
+  useEffect(() => {
+    if (!session.finished) return;
+    const save = async () => {
+      // CSRFトークン取得
+      const m = typeof document !== 'undefined' ? document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
+      let csrftoken = m ? decodeURIComponent(m[1]) : '';
+
+      // まだCSRFクッキーがない場合は取得
+      if (!csrftoken) {
+        try { await fetch('/api/auth/csrf/', { credentials: 'include' }); } catch {}
+        const m2 = typeof document !== 'undefined' ? document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) : null;
+        csrftoken = m2 ? decodeURIComponent(m2[1]) : '';
+      }
+      try {
+        await fetch('/api/auth/me/', { credentials: 'include' }); // セッション確認用（クッキー送信）
+        const res = await fetch('/api/result/', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+          },
+          body: JSON.stringify({ cps: session.stats.cps, accuracy: session.stats.accuracy }),
+        });
+        // 未ログイン等は無視
+        if (!res.ok) {
+          // console.debug('save_result skipped', await res.text());
+        }
+      } catch (e) {
+        // 保存は失敗してもアプリ継続
+      }
+    };
+    save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.finished]);
 
   // キーボードハイライト用のスタイルを動的に追加
   useEffect(() => {
