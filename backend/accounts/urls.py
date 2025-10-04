@@ -12,4 +12,6 @@ urlpatterns = [
     path("logout", views.logout_view, name="logout"),
     # 現在のユーザー情報
     path("me", views.me, name="me"),
+    # アカウント削除
+    path("delete", views.delete_account, name="delete_account"),
 ]

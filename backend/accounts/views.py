@@ -136,3 +136,21 @@ def me(request):
         "email": user.email,
         "records": records,
     }, status=200)
+
+
+# アカウント削除（要ログイン, CSRF保護）
+@csrf_protect
+@require_http_methods(["POST"])
+def delete_account(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"detail": "未ログインです"}, status=401)
+
+    # 現在のユーザーを取得してからログアウトし、最後に削除
+    user = request.user
+    try:
+        logout(request)  # セッション破棄
+        user.delete()    # 関連レコード（TypingRecord）は on_delete=CASCADE で削除
+    except Exception as e:
+        return JsonResponse({"detail": "削除に失敗しました", "error": str(e)}, status=500)
+
+    return JsonResponse({"detail": "account_deleted"}, status=200)

@@ -95,3 +95,24 @@ export async function me() {
   if (!res.ok) return null;
   return res.json();
 }
+
+// アカウント削除（要ログイン）
+export async function deleteAccount() {
+  await ensureCsrf(); // 事前にCSRFトークンを取得
+  let csrftoken = '';
+  if (typeof document !== 'undefined') {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    csrftoken = m ? decodeURIComponent(m[1]) : '';
+  }
+  const res = await fetch('/api/auth/delete/', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'X-CSRFToken': csrftoken },
+  });
+  if (!res.ok) {
+    let msg = 'アカウント削除に失敗しました';
+    try { const body = await res.json(); msg = body.detail || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}

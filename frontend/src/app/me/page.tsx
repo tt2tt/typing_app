@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"; // Reactのフックをインポー
 import Header from "../components/Header"; // ヘッダーコンポーネント
 import Footer from "../components/Footer"; // フッターコンポーネント
 import LineChart from "./components/LineChart"; // グラフコンポーネント
+import { deleteAccount, logout } from "@/lib/auth";
 
 // ユーザーの記録データ型
 type RecordItem = { cps: number; accuracy: number; created_at: string };
@@ -39,6 +40,23 @@ export default function MePage() {
     run();
   }, []);
 
+  // アカウント削除処理
+  const handleDelete = async () => {
+    if (!confirm('本当にアカウントを削除しますか？この操作は元に戻せません。')) return;
+    try {
+      setError(null);
+      await deleteAccount();
+      // 念のためセッションの残骸を消す
+      try { await logout(); } catch {}
+      // トップへ
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+    } catch (e: any) {
+      setError(e.message || '削除に失敗しました');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center">
       {/* ヘッダー */}
@@ -56,6 +74,14 @@ export default function MePage() {
             <div className="bg-white rounded shadow p-4">
               <p className="text-gray-800">ユーザー名: {user.username}</p>
               <p className="text-gray-600">メール: {user.email}</p>
+              <div className="mt-4">
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center rounded bg-red-600 px-3 py-2 text-white text-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  アカウントを削除する
+                </button>
+              </div>
             </div>
             {/* 過去記録のグラフ表示 */}
             <div className="bg-white rounded shadow p-4">
