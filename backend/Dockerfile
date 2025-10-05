@@ -1,5 +1,5 @@
-# Python 3.11の軽量イメージをベースにする
-FROM python:3.11-slim
+# Python 3.11の軽量イメージをベースにする（Digestでピン留めして再現性を確保）
+FROM python:3.11-slim@sha256:9bffe4353b925a1656688797ebc68f9c525e79b1d377a764d232182a519eeec4
 
 # 作業ディレクトリを/appに設定
 WORKDIR /app

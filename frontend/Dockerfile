@@ -1,5 +1,5 @@
-# Node.js 20のAlpineイメージを使用
-FROM node:20-alpine
+# Node.js 20 の Alpine イメージを digest でピン留め（Alpine 3.22.1）
+FROM node:20-alpine@sha256:eabac870db94f7342d6c33560d6613f188bbcf4bbe1f4eb47d5e2a08e1a37722
 
 # 作業ディレクトリを/appに設定
 WORKDIR /app
