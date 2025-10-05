@@ -49,18 +49,18 @@ export default function SignupPage() {
         <form onSubmit={onSubmit} className="w-full max-w-md bg-white p-6 rounded shadow">
           <div className="mb-4">
             {/* メールアドレス入力欄 */}
-            <label className="block text-sm font-medium text-gray-700">メールアドレス</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-black" />
+            <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700">メールアドレス</label>
+            <input id="signup-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-black" />
           </div>
           <div className="mb-4">
             {/* ユーザー名入力欄（任意） */}
-            <label className="block text-sm font-medium text-gray-700">ユーザー名（任意）</label>
-            <input value={username} onChange={e => setUsername(e.target.value)} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-black" />
+            <label htmlFor="signup-username" className="block text-sm font-medium text-gray-700">ユーザー名（任意）</label>
+            <input id="signup-username" value={username} onChange={e => setUsername(e.target.value)} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-black" />
           </div>
           <div className="mb-6">
             {/* パスワード入力欄 */}
-            <label className="block text-sm font-medium text-gray-700">パスワード</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-black" />
+            <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700">パスワード</label>
+            <input id="signup-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-black" />
           </div>
           {/* 送信ボタン */}
           <button type="submit" disabled={loading} className="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">
