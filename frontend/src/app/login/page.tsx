@@ -46,12 +46,12 @@ export default function LoginPage() {
         {/* ログインフォーム */}
         <form onSubmit={onSubmit} className="w-full max-w-md bg-white p-6 rounded shadow">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">メールまたはユーザー名</label>
-            <input value={identifier} onChange={e => setIdentifier(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+            <label htmlFor="login-identifier" className="block text-sm font-medium text-gray-700">メールまたはユーザー名</label>
+            <input id="login-identifier" value={identifier} onChange={e => setIdentifier(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
           </div>
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700">パスワード</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">パスワード</label>
+            <input id="login-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
           </div>
           <button type="submit" disabled={loading} className="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">
             {loading ? 'ログイン中...' : 'ログイン'}
