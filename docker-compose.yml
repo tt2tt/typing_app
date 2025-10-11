@@ -1,0 +1,69 @@
+# サービス定義
+services:
+# Next.jsフロントエンドサービス
+  frontend:
+    # Dockerfileの場所
+    build: ./frontend
+    # ホスト:コンテナのポートマッピング
+    ports:
+      - "3000:3000"
+    # APIのベースURL
+    environment:
+      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
+      - NODE_ENV=${NODE_ENV}
+    # backendサービス起動後に起動
+    depends_on:
+      - backend
+    # コンテナ内と連動
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/next.config.ts:/app/next.config.ts
+
+  # Djangoバックエンドサービス
+  backend:
+    # Dockerfileの場所
+    build: ./backend
+    # ホスト:コンテナのポートマッピング
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=${DB_HOST} # DBホスト名
+      - DB_NAME=${DB_NAME} # DB名
+      - DB_USER=${DB_USER} # DBユーザー
+      - DB_PASS=${DB_PASS} # DBパスワード
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY} # Djangoシークレットキー
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS} # 許可ホスト
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    # dbサービス起動後に起動
+    depends_on:
+      db:
+        condition: service_healthy
+    # マイグレーション -> サーバ起動
+    command: >
+      bash -lc "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+
+  # MySQLデータベースサービス
+  db:
+    # 使用するMySQLイメージ
+    image: mysql:8
+    environment:
+      - MYSQL_DATABASE=${DB_NAME} # DB名
+      - MYSQL_USER=${DB_USER} # DBユーザー
+      - MYSQL_PASSWORD=${DB_PASS} # DBパスワード
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD} # rootパスワード
+    # データ永続化
+    volumes:
+      - db_data:/var/lib/mysql
+    # ヘルスチェック
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+# ボリューム定義
+volumes:
+  db_data:
