@@ -25,5 +25,5 @@ RUN mkdir -p /app/log
 # 8000番ポートを公開
 EXPOSE 8000
 
-# GunicornでDjangoアプリケーションを起動
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+# GunicornでDjangoアプリケーションを起動（$PORTに対応）
+CMD [ "sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000}" ]

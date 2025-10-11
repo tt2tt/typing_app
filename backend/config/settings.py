@@ -65,15 +65,22 @@ TEMPLATES = [{
 # WSGIエントリポイント
 WSGI_APPLICATION = "config.wsgi.application"
 
-# データベース設定（MySQL、環境変数から値を取得）
+# データベース設定（MySQL）
+# Railway の MySQL プラグインの変数（MYSQLHOST/MYSQLPORT/MYSQLUSER/MYSQLPASSWORD/MYSQLDATABASE）も自動で読み取る
+_db_name = os.getenv("DB_NAME") or os.getenv("MYSQLDATABASE") or "typing"
+_db_user = os.getenv("DB_USER") or os.getenv("MYSQLUSER") or "app"
+_db_pass = os.getenv("DB_PASS") or os.getenv("MYSQLPASSWORD") or "appsecret"
+_db_host = os.getenv("DB_HOST") or os.getenv("MYSQLHOST") or "localhost"
+_db_port = os.getenv("DB_PORT") or os.getenv("MYSQLPORT") or "3306"
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": os.getenv("DB_NAME", "typing"),
-        "USER": os.getenv("DB_USER", "app"),
-        "PASSWORD": os.getenv("DB_PASS", "appsecret"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "3306"),
+        "NAME": _db_name,
+        "USER": _db_user,
+        "PASSWORD": _db_pass,
+        "HOST": _db_host,
+        "PORT": _db_port,
         "OPTIONS": {"charset": "utf8mb4"},
     }
 }
@@ -135,8 +142,15 @@ if not CSRF_TRUSTED_ORIGINS and DEBUG:
     ]
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
+
+# 本番でのSecure Cookie可否（プロキシ終端のHTTPSを信頼）
+_cookie_secure = os.getenv("DJANGO_COOKIE_SECURE", "0") == "1"
+SESSION_COOKIE_SECURE = _cookie_secure
+CSRF_COOKIE_SECURE = _cookie_secure
+
+# プロキシ配下でのHTTPS判定/Host判定（Railway等）
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 # リダイレクトを避けるため末尾スラッシュの自動付与を無効化
 APPEND_SLASH = False
