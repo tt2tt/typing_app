@@ -32,7 +32,7 @@ const Header = () => {
       await logout();
       setUser(null);
       router.push("/");
-    } catch (e) {
+    } catch {
       // 失敗時もとりあえず状態を未ログインに
       setUser(null);
     }

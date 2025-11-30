@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
-import { describe, test, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import SignupPage from './page'
 
 // MSW server to mock signup endpoints
@@ -10,7 +10,8 @@ const server = setupServer(
   http.get('/api/auth/csrf/', () => HttpResponse.json({ detail: 'ok' })),
   http.get('/api/auth/me/', () => HttpResponse.json({ id: 0 })),
   http.post('/api/auth/signup/', async ({ request }) => {
-    const body = await request.json() as any
+    type SignupRequestBody = { email?: string; password?: string; username?: string }
+    const body = await request.json() as SignupRequestBody
     if (!body.email || !body.password) {
       return HttpResponse.json({ detail: 'サインアップに失敗しました' }, { status: 400 })
     }
@@ -23,7 +24,8 @@ afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 // import mocked router to assert navigation
-const { mockRouter } = await import('next/navigation') as any
+type MockedNextNavigation = { mockRouter: { push: ReturnType<typeof vi.fn> } }
+const { mockRouter } = (await import('next/navigation')) as MockedNextNavigation
 
 describe('SignupPage integration', () => {
   test('successfully signs up and redirects to /', async () => {

@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
@@ -14,7 +14,8 @@ const server = setupServer(
   http.get('/api/auth/csrf/', () => HttpResponse.json({ detail: 'ok' })),
   http.get('/api/auth/me/', () => HttpResponse.json({ id: 1, username: 'alice', email: 'alice@example.com' })),
   http.post('/api/result/', async ({ request }) => {
-    const body = await request.json() as any
+    type ResultBody = { cps?: unknown; accuracy?: unknown }
+    const body = await request.json() as ResultBody
     if (typeof body.cps === 'number' && typeof body.accuracy === 'number') {
       return HttpResponse.json({ id: 1, cps: body.cps, accuracy: body.accuracy })
     }

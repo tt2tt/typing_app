@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
-import { describe, test, expect, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
 import LoginPage from './page'
 
 // MSW server to mock auth endpoints
@@ -10,7 +10,8 @@ const server = setupServer(
   http.get('/api/auth/csrf/', () => HttpResponse.json({ detail: 'ok' })),
   http.get('/api/auth/me/', () => HttpResponse.json({ id: 0 })),
   http.post('/api/auth/login/', async ({ request }) => {
-    const body = await request.json() as any
+    type LoginRequestBody = { identifier: string; password: string }
+    const body = await request.json() as LoginRequestBody
     if ((body.identifier === 'alice' || body.identifier === 'alice@example.com') && body.password === 'secret') {
       return HttpResponse.json({ id: 1, username: 'alice', email: 'alice@example.com' })
     }
@@ -23,7 +24,8 @@ afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 // get mocked router from setup to assert navigation
-const { mockRouter } = await import('next/navigation') as any
+type MockedNextNavigation = { mockRouter: { push: ReturnType<typeof vi.fn> } }
+const { mockRouter } = (await import('next/navigation')) as MockedNextNavigation
 
 describe('LoginPage integration', () => {
   test('successfully logs in and redirects to /', async () => {

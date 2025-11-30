@@ -19,6 +19,7 @@ export default function SignupPage() {
   // ローディング状態
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "予期せぬエラーが発生しました";
 
 
   // フォーム送信時の処理
@@ -28,12 +29,12 @@ export default function SignupPage() {
     setMsg(null);
     try {
       // サインアップAPI呼び出し
-      const user = await signup({ email, password, username: username || undefined });
+      await signup({ email, password, username: username || undefined });
       // 成功したらトップへ遷移
       router.push("/");
-    } catch (e: any) {
+    } catch (error: unknown) {
       // エラーメッセージ表示
-      setMsg(e.message);
+      setMsg(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

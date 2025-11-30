@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { login, me } from "@/lib/auth";
+import { login } from "@/lib/auth";
 
 
 // ログインページコンポーネント
@@ -14,8 +14,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState(""); // パスワード
   const [msg, setMsg] = useState<string | null>(null); // エラーメッセージ等
   const [loading, setLoading] = useState(false); // ローディング状態
-  const [currentUser, setCurrentUser] = useState<any>(null); // 現在のユーザー
   const router = useRouter(); // ルーター
+
+  const getErrorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : "予期せぬエラーが発生しました";
 
   // フォーム送信時の処理
   const onSubmit = async (e: React.FormEvent) => {
@@ -24,13 +26,12 @@ export default function LoginPage() {
     setMsg(null);
     try {
       // ログインAPI呼び出し
-      const user = await login({ identifier, password });
-      setCurrentUser(user);
+      await login({ identifier, password });
       // 成功したらトップへ遷移
       router.push("/");
-    } catch (e: any) {
+    } catch (error: unknown) {
       // エラー時はメッセージ表示
-      setMsg(e.message);
+      setMsg(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

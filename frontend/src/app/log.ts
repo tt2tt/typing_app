@@ -1,6 +1,6 @@
 // 開発・検証用のログ出力関数
 // 本番環境（production）以外でのみconsole.logを出力
-export const log = (...args: any[]) => {
+export const log = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== 'production') {
     console.log('[app]', ...args);
   }

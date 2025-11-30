@@ -11,6 +11,9 @@ import { deleteAccount, logout } from "@/lib/auth";
 type RecordItem = { cps: number; accuracy: number; created_at: string };
 
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "予期せぬエラーが発生しました";
+
 // マイページ本体コンポーネント
 export default function MePage() {
   // ローディング状態
@@ -26,13 +29,13 @@ export default function MePage() {
       try {
         setLoading(true); // ローディング開始
         setError(null);   // エラー初期化
-        // APIからユーザー情報取得
-  const res = await fetch('/api/auth/me/', { credentials: 'include' });
+          // APIからユーザー情報取得
+          const res = await fetch('/api/auth/me/', { credentials: 'include' });
         if (!res.ok) throw new Error('未ログインか、取得に失敗しました');
         const json = await res.json();
         setUser(json); // ユーザー情報セット
-      } catch (e: any) {
-        setError(e.message); // エラーセット
+      } catch (error: unknown) {
+        setError(getErrorMessage(error)); // エラーセット
       } finally {
         setLoading(false); // ローディング終了
       }
@@ -52,8 +55,8 @@ export default function MePage() {
       if (typeof window !== 'undefined') {
         window.location.href = '/';
       }
-    } catch (e: any) {
-      setError(e.message || '削除に失敗しました');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error));
     }
   };
 

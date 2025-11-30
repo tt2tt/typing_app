@@ -32,7 +32,7 @@ export async function signup(input: { email: string; password: string; username?
     try {
       const body = await res.json();
       msg = body.detail || msg;
-    } catch (_) {}
+    } catch {}
     throw new Error(msg);
   }
   // 成功時はユーザー情報を返す

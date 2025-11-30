@@ -10,7 +10,6 @@ import TypingKeyboard from "./components/TypingKeyboard";
 import TypingResult from "./components/TypingResult";
 import TypingLoading from "./components/TypingLoading";
 import TypingError from "./components/TypingError";
-import { useRouter } from "next/navigation";
 
 // 型定義：タイピング1行分のデータ
 type TypingItem = { kanji: string; romaji: string };
@@ -27,19 +26,35 @@ const getEvaluation = (cps: number) => {
 };
 
 // APIレスポンスを安全にパースする関数
-const parseTypingResponse = (response: any): TypingItem[] => {
+const parseTypingResponse = (response: unknown): TypingItem[] => {
   // レスポンスの成形
   try {
     // 配列ならそのまま使用
-    if (Array.isArray(response)) return response as TypingItem[];
+    if (Array.isArray(response)) {
+      return response.filter((item): item is TypingItem => {
+        if (typeof item !== "object" || item === null) return false;
+        const maybeItem = item as { kanji?: unknown; romaji?: unknown };
+        return typeof maybeItem.kanji === "string" && typeof maybeItem.romaji === "string";
+      });
+    }
 
     // テキストをJsonに変更
-    if (response && typeof response.text === "string") {
-      let jsonText = response.text.trim();
+    if (
+      typeof response === "object" &&
+      response !== null &&
+      "text" in response &&
+      typeof (response as { text: unknown }).text === "string"
+    ) {
+      let jsonText = (response as { text: string }).text.trim();
       if (jsonText.startsWith("```json")) jsonText = jsonText.replace(/^```json\n?/, "");
       if (jsonText.endsWith("```")) jsonText = jsonText.replace(/```$/, "");
       const data = JSON.parse(jsonText);
-      return Array.isArray(data) ? (data as TypingItem[]) : [];
+      if (!Array.isArray(data)) return [];
+      return data.filter((item): item is TypingItem => {
+        if (typeof item !== "object" || item === null) return false;
+        const maybeItem = item as { kanji?: unknown; romaji?: unknown };
+        return typeof maybeItem.kanji === "string" && typeof maybeItem.romaji === "string";
+      });
     }
   } catch (e) {
     console.error("Error parsing typing data:", e, response);
@@ -76,9 +91,10 @@ const useTypingData = (category: string) => {
         setData(items);
       
       // エラーの場合はローディングを中止
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-        console.error("Error fetching typing data:", err);
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (error instanceof Error && error.name === "AbortError") return;
+        console.error("Error fetching typing data:", error);
         setError("データの取得に失敗しました。");
       } finally {
         setLoading(false);
@@ -235,8 +251,6 @@ const TypingPractice: React.FC = () => {
   // 使用するカテゴリーの取得
   const searchParams = useSearchParams();
   const category = (searchParams.get("category") || "animal").trim();
-  const router = useRouter();
-
   const { data: typingData, loading, error } = useTypingData(category);
   const session = useTypingSession(typingData);
 
@@ -269,7 +283,7 @@ const TypingPractice: React.FC = () => {
         if (!res.ok) {
           // console.debug('save_result skipped', await res.text());
         }
-      } catch (e) {
+      } catch {
         // 保存は失敗してもアプリ継続
       }
     };
