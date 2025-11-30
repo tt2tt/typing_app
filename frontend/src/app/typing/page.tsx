@@ -1,7 +1,7 @@
 "use client";
 
 // 必要なReactフックやコンポーネントをインポート
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { Suspense, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -247,7 +247,7 @@ const useTypingSession = (typingData: TypingItem[]) => {
 };
 
 // メインのタイピング練習ページコンポーネント
-const TypingPractice: React.FC = () => {
+const TypingPracticeInner: React.FC = () => {
   // 使用するカテゴリーの取得
   const searchParams = useSearchParams();
   const category = (searchParams.get("category") || "animal").trim();
@@ -413,5 +413,11 @@ const TypingPractice: React.FC = () => {
     </div>
   );
 };
+
+const TypingPractice = () => (
+  <Suspense fallback={<TypingLoading />}>
+    <TypingPracticeInner />
+  </Suspense>
+);
 
 export default TypingPractice;
